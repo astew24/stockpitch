@@ -64,6 +64,9 @@ class PitchProfile:
     downside_risk: int
 
 
+# Scoring weights used for the quant signal layer:
+#   confidence × catalyst_score / (1 + downside_risk) → expected payoff proxy
+# These are rough approximations — not meant to be precise, just directional.
 PITCH_PROFILES: Dict[str, PitchProfile] = {
     "PLTR": PitchProfile(
         ticker="PLTR",
