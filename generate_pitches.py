@@ -121,7 +121,7 @@ PITCH_PROFILES: Dict[str, PitchProfile] = {
 }
 
 
-def ensure_plotting_dependencies() -> None:
+def ensure_plotting_dependencies() -> None:  # noqa: PLR0912 — many import aliases, expected
     global plt, mpatches, np, PdfPages, FancyBboxPatch
     if plt is not None:
         return
