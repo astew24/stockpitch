@@ -150,6 +150,7 @@ def ensure_plotting_dependencies() -> None:
 
 
 def set_render_profile(args) -> None:
+    """Update the global render profile from parsed CLI args."""
     global RENDER_PROFILE
     RENDER_PROFILE = RenderProfile(
         deck_date=args.deck_date.strip() or DECK_DATE_LABEL,
