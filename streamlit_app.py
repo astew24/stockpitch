@@ -27,6 +27,7 @@ st.set_page_config(
 
 
 def inject_styles() -> None:
+    """Inject custom CSS — uses CSS variables so theme colors stay consistent with the PDF output."""
     st.markdown(
         f"""
         <style>
