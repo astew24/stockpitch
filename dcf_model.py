@@ -88,6 +88,7 @@ class DCFResult:
 
 
 def _normalize_history(series: pd.Series) -> pd.Series:
+    """Coerce to numeric, drop NaNs, ensure DatetimeIndex, sort ascending."""
     cleaned = pd.to_numeric(series, errors="coerce").dropna()
     if cleaned.empty:
         raise ValueError("Required financial statement row is empty.")
