@@ -98,6 +98,7 @@ def _normalize_history(series: pd.Series) -> pd.Series:
 
 
 def _extract_statement_series(statement: pd.DataFrame, labels: Iterable[str]) -> pd.Series:
+    """Try each label in order and return the first match. Raises if none found."""
     if statement is None or statement.empty:
         raise ValueError("Missing financial statement data from yfinance.")
 
