@@ -7,16 +7,15 @@ Uses matplotlib PdfPages — no extra dependencies needed
 import argparse
 import csv
 from dataclasses import dataclass
+import json
 import os
 from typing import Dict, List
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib.patches import FancyBboxPatch
+plt = None
+mpatches = None
+np = None
+PdfPages = None
+FancyBboxPatch = None
 
 # ─── DESIGN SYSTEM ────────────────────────────────────────────────────────────
 
@@ -106,6 +105,33 @@ PITCH_PROFILES: Dict[str, PitchProfile] = {
 }
 
 
+def ensure_plotting_dependencies() -> None:
+    global plt, mpatches, np, PdfPages, FancyBboxPatch
+    if plt is not None:
+        return
+
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.patches as matplotlib_patches
+        import matplotlib.pyplot as pyplot
+        import numpy as numpy
+        from matplotlib.backends.backend_pdf import PdfPages as pdf_pages_class
+        from matplotlib.patches import FancyBboxPatch as fancy_bbox_patch
+    except ModuleNotFoundError as exc:
+        missing = str(exc).split("'")[1] if "'" in str(exc) else str(exc)
+        raise SystemExit(
+            "Missing plotting dependency "
+            f"`{missing}`. Install with `pip install -r requirements.txt`."
+        ) from exc
+
+    plt = pyplot
+    mpatches = matplotlib_patches
+    np = numpy
+    PdfPages = pdf_pages_class
+    FancyBboxPatch = fancy_bbox_patch
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate stock pitch PDFs and a quant-ranked combined deck."
@@ -134,6 +160,16 @@ def parse_args():
         "--export-csv",
         action="store_true",
         help="Export a CSV with the generated signal metrics.",
+    )
+    parser.add_argument(
+        "--export-json",
+        action="store_true",
+        help="Export a JSON file with the generated signal metrics.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only compute and print ranked metrics (skip PDF rendering).",
     )
     return parser.parse_args()
 
@@ -255,6 +291,28 @@ def export_metrics_csv(metrics: List[Dict[str, float]], output_dir: str) -> str:
         for metric in metrics:
             writer.writerow(metric)
     return csv_path
+
+
+def export_metrics_json(metrics: List[Dict[str, float]], output_dir: str) -> str:
+    json_path = os.path.join(output_dir, "PitchSignalMetrics.json")
+    with open(json_path, "w", encoding="utf-8") as json_file:
+        json.dump(metrics, json_file, indent=2)
+    return json_path
+
+
+def print_ranked_metrics(metrics: List[Dict[str, float]]) -> None:
+    print("\nRanked signal view:")
+    for metric in metrics:
+        print(
+            f"  #{int(metric['rank'])} {metric['ticker']:4s} "
+            f"{metric['recommendation']:5s} | "
+            f"payoff {metric['expected_return_pct']:>5.1f}% | "
+            f"conviction {metric['conviction_score']:>5.1f} | "
+            f"confidence {metric['confidence_pct']:>5.1f}%"
+        )
+
+    print(f"\n{portfolio_construction_note(metrics)}")
+
 
 def new_fig():
     fig = plt.figure(figsize=(13.33, 7.5))  # 16:9 widescreen
@@ -1179,9 +1237,22 @@ def main():
         metric["ticker"]: metric for metric in portfolio_metrics
     }
 
+    if args.dry_run:
+        print_ranked_metrics(portfolio_metrics)
+
     if args.export_csv:
         csv_path = export_metrics_csv(portfolio_metrics, output_dir)
         print(f"  ✓  {csv_path}")
+
+    if args.export_json:
+        json_path = export_metrics_json(portfolio_metrics, output_dir)
+        print(f"  ✓  {json_path}")
+
+    if args.dry_run:
+        print("\nDry run completed. No PDFs were generated.")
+        return
+
+    ensure_plotting_dependencies()
 
     if not args.combined_only:
         for ticker in selected_tickers:
