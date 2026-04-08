@@ -364,12 +364,13 @@ def _header(ax, title: str, subtitle: str, tag: str, tag_color: str) -> None:
 
 
 def _footer(ax, ticker: str) -> None:
+    from datetime import date
     ax.set_facecolor(NAVY)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
     ax.text(0.03, 0.5, ticker, color=MGRAY, fontsize=8, ha="left")
-    ax.text(0.97, 0.5, "Generated from live yfinance data", color=MGRAY, fontsize=8, ha="right")
+    ax.text(0.97, 0.5, f"Generated from live yfinance data · {date.today().isoformat()}", color=MGRAY, fontsize=8, ha="right")
 
 
 def _build_cover_page(pdf: PdfPages, snapshot: CompanyFinancialSnapshot, result: DCFResult) -> None:
