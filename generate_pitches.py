@@ -32,6 +32,20 @@ BLUE   = "#1A5276"
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 DECK_DATE_LABEL = "April 2026"
+DEFAULT_AUDIENCE_LABEL = "For Interview Use Only"
+DEFAULT_DESK_NAME = "Confidential Research"
+DEFAULT_ANALYST = "Analyst Team"
+
+
+@dataclass
+class RenderProfile:
+    deck_date: str = DECK_DATE_LABEL
+    audience_label: str = DEFAULT_AUDIENCE_LABEL
+    desk_name: str = DEFAULT_DESK_NAME
+    analyst_name: str = DEFAULT_ANALYST
+
+
+RENDER_PROFILE = RenderProfile()
 
 
 @dataclass(frozen=True)
@@ -132,6 +146,23 @@ def ensure_plotting_dependencies() -> None:
     FancyBboxPatch = fancy_bbox_patch
 
 
+def set_render_profile(args) -> None:
+    global RENDER_PROFILE
+    RENDER_PROFILE = RenderProfile(
+        deck_date=args.deck_date.strip() or DECK_DATE_LABEL,
+        audience_label=args.audience_label.strip() or DEFAULT_AUDIENCE_LABEL,
+        desk_name=args.desk_name.strip() or DEFAULT_DESK_NAME,
+        analyst_name=args.analyst_name.strip() or DEFAULT_ANALYST,
+    )
+
+
+def cover_stamp_text() -> str:
+    return (
+        f"{RENDER_PROFILE.desk_name}  ·  {RENDER_PROFILE.deck_date}  ·  "
+        f"{RENDER_PROFILE.audience_label}"
+    )
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate stock pitch PDFs and a quant-ranked combined deck."
@@ -170,6 +201,31 @@ def parse_args():
         "--dry-run",
         action="store_true",
         help="Only compute and print ranked metrics (skip PDF rendering).",
+    )
+    parser.add_argument(
+        "--deck-date",
+        default=DECK_DATE_LABEL,
+        help="Deck date label shown on covers and summary slide.",
+    )
+    parser.add_argument(
+        "--audience-label",
+        default=DEFAULT_AUDIENCE_LABEL,
+        help="Audience label appended on covers (example: For IC Review Only).",
+    )
+    parser.add_argument(
+        "--desk-name",
+        default=DEFAULT_DESK_NAME,
+        help="Desk or organization name shown in footer and cover stamps.",
+    )
+    parser.add_argument(
+        "--analyst-name",
+        default=DEFAULT_ANALYST,
+        help="Analyst name shown in footer and exported memo.",
+    )
+    parser.add_argument(
+        "--export-memo",
+        action="store_true",
+        help="Export a PM-style markdown investment memo.",
     )
     return parser.parse_args()
 
@@ -314,6 +370,93 @@ def print_ranked_metrics(metrics: List[Dict[str, float]]) -> None:
     print(f"\n{portfolio_construction_note(metrics)}")
 
 
+def suggested_weights(metrics: List[Dict[str, float]]) -> List[Dict[str, float]]:
+    weighted_metrics = []
+    score_sum = sum(
+        metric["conviction_score"] * (metric["confidence_pct"] / 100.0)
+        for metric in metrics
+    )
+    if score_sum <= 0:
+        score_sum = len(metrics)
+
+    for metric in metrics:
+        raw = metric["conviction_score"] * (metric["confidence_pct"] / 100.0)
+        weight = (raw / score_sum) * 100.0
+        weighted_metric = dict(metric)
+        weighted_metric["suggested_weight_pct"] = weight
+        weighted_metric["entry_range"] = (
+            f"{format_currency(metric['price'] * 0.97)} - {format_currency(metric['price'] * 1.03)}"
+        )
+        weighted_metric["stop_rule"] = (
+            "Cover +12% above entry" if metric["recommendation"] == "SHORT"
+            else "Cut -12% below entry"
+        )
+        weighted_metrics.append(weighted_metric)
+
+    return weighted_metrics
+
+
+def portfolio_action_brief(metrics: List[Dict[str, float]]) -> List[str]:
+    weighted = suggested_weights(metrics)
+    strongest = max(weighted, key=lambda metric: metric["conviction_score"])
+    median_confidence = sorted(metric["confidence_pct"] for metric in weighted)[len(weighted) // 2]
+    short_count = sum(metric["recommendation"] == "SHORT" for metric in weighted)
+    long_count = len(weighted) - short_count
+
+    lines = [
+        f"Lead with {strongest['ticker']} as the anchor idea "
+        f"({strongest['conviction_score']:.0f} conviction score).",
+        f"Portfolio posture: {long_count} long / {short_count} short with median "
+        f"{median_confidence:.0f}% confidence across ideas.",
+        "Enter in tiers over 3 sessions; keep first tranche at half size until"
+        " the first catalyst confirms direction.",
+    ]
+    return lines
+
+
+def export_memo_markdown(metrics: List[Dict[str, float]], output_dir: str) -> str:
+    memo_path = os.path.join(output_dir, "PortfolioManagerMemo.md")
+    weighted = suggested_weights(metrics)
+    brief_lines = portfolio_action_brief(metrics)
+    gross_target_move = sum(metric["expected_return_pct"] for metric in metrics) / len(metrics)
+
+    lines = [
+        "# Portfolio Manager Brief",
+        "",
+        f"- Prepared by: {RENDER_PROFILE.analyst_name}",
+        f"- Desk: {RENDER_PROFILE.desk_name}",
+        f"- Date: {RENDER_PROFILE.deck_date}",
+        "",
+        "## Why this basket",
+        (
+            f"This slate mixes valuation compression and quality compounders with an "
+            f"average target move of {gross_target_move:.1f}%. Ideas are ranked by a"
+            " blended conviction model (payoff, catalysts, confidence, and risk)."
+        ),
+        "",
+        "## Action brief",
+    ]
+    for line in brief_lines:
+        lines.append(f"- {line}")
+
+    lines.extend(["", "## Position plan"])
+    for metric in weighted:
+        lines.extend(
+            [
+                f"### {metric['ticker']} ({metric['recommendation']})",
+                f"- Suggested weight: {metric['suggested_weight_pct']:.1f}%",
+                f"- Entry range: {metric['entry_range']}",
+                f"- Stop rule: {metric['stop_rule']}",
+                f"- Thesis: {metric['thesis']}",
+                "",
+            ]
+        )
+
+    with open(memo_path, "w", encoding="utf-8") as memo_file:
+        memo_file.write("\n".join(lines))
+    return memo_path
+
+
 def new_fig():
     fig = plt.figure(figsize=(13.33, 7.5))  # 16:9 widescreen
     fig.patch.set_facecolor(WHITE)
@@ -343,8 +486,10 @@ def footer(fig, ticker, page):
     ax = fig.add_axes([0, 0, 1, 0.04])
     ax.set_facecolor(NAVY)
     ax.axis('off')
-    ax.text(0.04, 0.5, f"{ticker} — Confidential Research", color=MGRAY,
+    ax.text(0.04, 0.5, f"{ticker} — {RENDER_PROFILE.desk_name}", color=MGRAY,
             fontsize=7, va='center')
+    ax.text(0.50, 0.5, f"Prepared by {RENDER_PROFILE.analyst_name}", color=MGRAY,
+            fontsize=7, va='center', ha='center')
     ax.text(0.96, 0.5, f"Page {page}", color=MGRAY, fontsize=7,
             va='center', ha='right')
 
@@ -390,8 +535,7 @@ def pitch_pltr(pdf):
             "fundamental economics in a commoditizing AI market.",
             color=LGRAY, fontsize=11, ha='center', va='center', linespacing=1.6)
 
-    ax.text(0.5, 0.10, "Equity Research  ·  April 2026  ·  For Interview Use Only",
-            color=MGRAY, fontsize=9, ha='center')
+    ax.text(0.5, 0.10, cover_stamp_text(), color=MGRAY, fontsize=9, ha='center')
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
     # --- SLIDE 2: SNAPSHOT & THESIS ---
@@ -604,8 +748,7 @@ def pitch_medp(pdf):
             "Thesis: A founder-led, best-in-class CRO compounding FCF at 20%+\n"
             "with a durable competitive moat, trading at an unwarranted discount to peers.",
             color=LGRAY, fontsize=11, ha='center', linespacing=1.6)
-    ax.text(0.5, 0.10, "Equity Research  ·  April 2026  ·  For Interview Use Only",
-            color=MGRAY, fontsize=9, ha='center')
+    ax.text(0.5, 0.10, cover_stamp_text(), color=MGRAY, fontsize=9, ha='center')
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
     # --- SLIDE 2: SNAPSHOT & THESIS ---
@@ -804,8 +947,7 @@ def pitch_dds(pdf):
             "Thesis: The most aggressive capital allocator in retail, hiding in plain sight.\n"
             "Owns its real estate, has retired 85%+ of shares, and trades at 6x FCF.",
             color=LGRAY, fontsize=11, ha='center', linespacing=1.6)
-    ax.text(0.5, 0.10, "Equity Research  ·  April 2026  ·  For Interview Use Only",
-            color=MGRAY, fontsize=9, ha='center')
+    ax.text(0.5, 0.10, cover_stamp_text(), color=MGRAY, fontsize=9, ha='center')
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
     # --- SLIDE 2: SNAPSHOT & THESIS ---
@@ -1125,15 +1267,89 @@ def quant_signal_slide(pdf, metrics):
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
 
+def portfolio_manager_brief_slide(pdf, metrics):
+    weighted = suggested_weights(metrics)
+    brief_lines = portfolio_action_brief(metrics)
+    fig = new_fig()
+    navy_header(
+        fig,
+        "Portfolio Manager Brief",
+        f"{RENDER_PROFILE.desk_name}  ·  {RENDER_PROFILE.deck_date}",
+        "PM",
+        GOLD,
+    )
+    footer(fig, "PORTFOLIO", 2)
+
+    ax = fig.add_axes([0.03, 0.08, 0.94, 0.70])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+
+    # Left panel: decision memo
+    ax.add_patch(FancyBboxPatch((0.00, 0.02), 0.46, 0.94,
+                                boxstyle="round,pad=0.015", fc=LGRAY, ec=NAVY, lw=0.8))
+    ax.text(0.03, 0.91, "Desk Notes", fontsize=11, fontweight='bold',
+            color=NAVY, transform=ax.transAxes)
+    ax.text(0.03, 0.85, f"Prepared by: {RENDER_PROFILE.analyst_name}",
+            fontsize=8.5, color=MGRAY, transform=ax.transAxes)
+
+    for idx, line in enumerate(brief_lines):
+        y = 0.74 - idx * 0.19
+        ax.add_patch(FancyBboxPatch((0.03, y - 0.08), 0.40, 0.14,
+                                    boxstyle="round,pad=0.01", fc=WHITE, ec="#D5DCE5", lw=0.8))
+        ax.text(0.05, y + 0.01, f"0{idx + 1}", fontsize=8, color=GOLD,
+                fontweight='bold', transform=ax.transAxes)
+        ax.text(0.09, y + 0.01, line, fontsize=8.3, color=NAVY,
+                transform=ax.transAxes, wrap=True)
+
+    ax.text(0.03, 0.08,
+            "Execution principle: size ideas by conviction and confidence,"
+            " not by headline payoff alone.",
+            fontsize=8, color=MGRAY, transform=ax.transAxes, wrap=True)
+
+    # Right panel: position sizing table
+    ax.add_patch(FancyBboxPatch((0.50, 0.02), 0.49, 0.94,
+                                boxstyle="round,pad=0.015", fc="#F8FAFD", ec=NAVY, lw=0.8))
+    ax.text(0.74, 0.91, "Suggested Position Plan", fontsize=11, fontweight='bold',
+            color=NAVY, ha='center', transform=ax.transAxes)
+
+    headers = ["Ticker", "Side", "Weight", "Entry", "Stop Rule"]
+    xs = [0.52, 0.61, 0.69, 0.78, 0.89]
+    for idx, header in enumerate(headers):
+        ax.text(xs[idx], 0.83, header, fontsize=8.2, color=MGRAY, fontweight='bold',
+                ha='center', transform=ax.transAxes)
+
+    for row_idx, metric in enumerate(weighted):
+        y = 0.73 - row_idx * 0.21
+        side_color = recommendation_color(metric["recommendation"])
+        ax.add_patch(FancyBboxPatch((0.515, y - 0.07), 0.46, 0.15,
+                                    boxstyle="round,pad=0.01", fc=WHITE, ec="#DDE4EE", lw=0.8))
+        ax.text(xs[0], y, metric["ticker"], fontsize=10, fontweight='bold',
+                color=NAVY, ha='center', transform=ax.transAxes)
+        ax.add_patch(FancyBboxPatch((xs[1] - 0.026, y - 0.03), 0.052, 0.06,
+                                    boxstyle="round,pad=0.01", fc=side_color, ec='none'))
+        ax.text(xs[1], y, metric["recommendation"], fontsize=7.5, color=WHITE,
+                fontweight='bold', ha='center', va='center', transform=ax.transAxes)
+        ax.text(xs[2], y, f"{metric['suggested_weight_pct']:.1f}%", fontsize=9,
+                color=NAVY, fontweight='bold', ha='center', transform=ax.transAxes)
+        ax.text(xs[3], y, metric["entry_range"], fontsize=7.2,
+                color=NAVY, ha='center', transform=ax.transAxes)
+        ax.text(xs[4], y, metric["stop_rule"], fontsize=7.2,
+                color=MGRAY, ha='center', transform=ax.transAxes)
+
+    pdf.savefig(fig, bbox_inches='tight'); plt.close()
+
+
 def summary_slide(pdf, metrics):
     fig = new_fig()
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_facecolor(NAVY); ax.axis('off')
+    footer(fig, "PORTFOLIO", 3)
 
     idea_label = "Idea" if len(metrics) == 1 else "Ideas"
     ax.text(0.5, 0.91, "EQUITY RESEARCH — PORTFOLIO SUMMARY", color=GOLD,
             fontsize=14, fontweight='bold', ha='center')
-    ax.text(0.5, 0.85, f"{len(metrics)} Differentiated {idea_label} Across Sectors  ·  {DECK_DATE_LABEL}",
+    ax.text(0.5, 0.85, f"{len(metrics)} Differentiated {idea_label} Across Sectors  ·  {RENDER_PROFILE.deck_date}",
             color=WHITE, fontsize=10, ha='center')
 
     headers = ["Ticker", "Name", "Sector", "Rec.", "Price", "Target", "Payoff", "Core Thesis"]
@@ -1215,6 +1431,7 @@ def summary_slide(pdf, metrics):
 
 def main():
     args = parse_args()
+    set_render_profile(args)
     try:
         selected_tickers = normalize_tickers(args.tickers)
     except ValueError as exc:
@@ -1248,6 +1465,10 @@ def main():
         json_path = export_metrics_json(portfolio_metrics, output_dir)
         print(f"  ✓  {json_path}")
 
+    if args.export_memo:
+        memo_path = export_memo_markdown(portfolio_metrics, output_dir)
+        print(f"  ✓  {memo_path}")
+
     if args.dry_run:
         print("\nDry run completed. No PDFs were generated.")
         return
@@ -1269,6 +1490,7 @@ def main():
     combined_path = os.path.join(output_dir, combined_name)
     with PdfPages(combined_path) as pdf:
         quant_signal_slide(pdf, portfolio_metrics)
+        portfolio_manager_brief_slide(pdf, portfolio_metrics)
         summary_slide(pdf, portfolio_metrics)
         for ticker in selected_tickers:
             pitch_renderers[ticker](pdf)
