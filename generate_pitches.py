@@ -4,14 +4,19 @@ Stock Pitch Deck Generator
 Uses matplotlib PdfPages — no extra dependencies needed
 """
 
+import argparse
+import csv
+from dataclasses import dataclass
+import os
+from typing import Dict, List
+
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import FancyBboxPatch
-import numpy as np
-import os
 
 # ─── DESIGN SYSTEM ────────────────────────────────────────────────────────────
 
@@ -24,6 +29,232 @@ RED    = "#C0392B"
 GREEN  = "#1A7A4A"
 ORANGE = "#E67E22"
 BLUE   = "#1A5276"
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
+DECK_DATE_LABEL = "April 2026"
+
+
+@dataclass(frozen=True)
+class PitchProfile:
+    ticker: str
+    pdf_basename: str
+    name: str
+    sector: str
+    recommendation: str
+    current_price: float
+    target_price: float
+    thesis: str
+    playbook: str
+    confidence: float
+    catalyst_score: int
+    downside_risk: int
+
+
+PITCH_PROFILES: Dict[str, PitchProfile] = {
+    "PLTR": PitchProfile(
+        ticker="PLTR",
+        pdf_basename="PLTR_Short_Palantir",
+        name="Palantir Technologies",
+        sector="Technology",
+        recommendation="SHORT",
+        current_price=80.0,
+        target_price=28.0,
+        thesis=(
+            "Valuation bubble (115x P/E), plateauing government growth, and"
+            " weak commercial quality drive a likely de-rating."
+        ),
+        playbook="Valuation Compression",
+        confidence=0.72,
+        catalyst_score=8,
+        downside_risk=7,
+    ),
+    "MEDP": PitchProfile(
+        ticker="MEDP",
+        pdf_basename="MEDP_Long_Medpace",
+        name="Medpace Holdings",
+        sector="Healthcare / CRO",
+        recommendation="LONG",
+        current_price=293.0,
+        target_price=410.0,
+        thesis=(
+            "Founder-led CRO with high FCF conversion and margin leadership"
+            " trading below slower peers."
+        ),
+        playbook="Quality Compounder Re-Rating",
+        confidence=0.77,
+        catalyst_score=7,
+        downside_risk=5,
+    ),
+    "DDS": PitchProfile(
+        ticker="DDS",
+        pdf_basename="DDS_Long_Dillards",
+        name="Dillard's Inc.",
+        sector="Consumer / Real Estate",
+        recommendation="LONG",
+        current_price=333.0,
+        target_price=450.0,
+        thesis=(
+            "Aggressive buybacks, owned real-estate optionality, and underfollowed"
+            " fundamentals create durable upside."
+        ),
+        playbook="Capital Allocation + Asset Value",
+        confidence=0.74,
+        catalyst_score=8,
+        downside_risk=6,
+    ),
+}
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate stock pitch PDFs and a quant-ranked combined deck."
+    )
+    parser.add_argument(
+        "--tickers",
+        default=",".join(PITCH_PROFILES.keys()),
+        help="Comma-separated tickers to include (default: all).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory where PDFs/CSV are written.",
+    )
+    parser.add_argument(
+        "--combined-name",
+        default="StockPitches_Combined.pdf",
+        help="Filename for the combined PDF deck.",
+    )
+    parser.add_argument(
+        "--combined-only",
+        action="store_true",
+        help="Only produce the combined deck (skip individual pitch PDFs).",
+    )
+    parser.add_argument(
+        "--export-csv",
+        action="store_true",
+        help="Export a CSV with the generated signal metrics.",
+    )
+    return parser.parse_args()
+
+
+def normalize_tickers(raw_tickers: str) -> List[str]:
+    tickers = [ticker.strip().upper() for ticker in raw_tickers.split(",") if ticker.strip()]
+    if not tickers:
+        raise ValueError("No tickers provided. Use --tickers PLTR,MEDP,DDS.")
+
+    invalid = sorted(set(tickers) - set(PITCH_PROFILES))
+    if invalid:
+        valid = ", ".join(sorted(PITCH_PROFILES))
+        raise ValueError(
+            f"Unsupported ticker(s): {', '.join(invalid)}. Valid options: {valid}"
+        )
+
+    deduped = []
+    seen = set()
+    for ticker in tickers:
+        if ticker not in seen:
+            deduped.append(ticker)
+            seen.add(ticker)
+    return deduped
+
+
+def format_currency(value: float) -> str:
+    return f"${value:,.0f}"
+
+
+def target_move_pct(profile: PitchProfile) -> float:
+    if profile.recommendation == "SHORT":
+        return ((profile.current_price - profile.target_price) / profile.current_price) * 100
+    return ((profile.target_price - profile.current_price) / profile.current_price) * 100
+
+
+def build_pitch_metrics(profile: PitchProfile) -> Dict[str, float]:
+    expected_return_pct = target_move_pct(profile)
+    confidence_pct = profile.confidence * 100
+    asymmetry_ratio = expected_return_pct / max(10.0, profile.downside_risk * 4.0)
+    conviction_score = (
+        expected_return_pct * 0.45
+        + confidence_pct * 0.30
+        + profile.catalyst_score * 10 * 0.15
+        + (11 - profile.downside_risk) * 10 * 0.10
+    )
+    conviction_score = max(0.0, min(100.0, conviction_score))
+    return {
+        "ticker": profile.ticker,
+        "name": profile.name,
+        "sector": profile.sector,
+        "recommendation": profile.recommendation,
+        "price": profile.current_price,
+        "target": profile.target_price,
+        "expected_return_pct": expected_return_pct,
+        "thesis": profile.thesis,
+        "playbook": profile.playbook,
+        "confidence_pct": confidence_pct,
+        "catalyst_score": float(profile.catalyst_score),
+        "downside_risk": float(profile.downside_risk),
+        "asymmetry_ratio": asymmetry_ratio,
+        "conviction_score": conviction_score,
+    }
+
+
+def build_portfolio_metrics(selected_tickers: List[str]) -> List[Dict[str, float]]:
+    metrics = [build_pitch_metrics(PITCH_PROFILES[ticker]) for ticker in selected_tickers]
+    metrics.sort(key=lambda metric: metric["conviction_score"], reverse=True)
+    for rank, metric in enumerate(metrics, start=1):
+        metric["rank"] = float(rank)
+    return metrics
+
+
+def recommendation_color(recommendation: str) -> str:
+    return GREEN if recommendation == "LONG" else RED
+
+
+def portfolio_construction_note(metrics: List[Dict[str, float]]) -> str:
+    if not metrics:
+        return "No ideas selected."
+
+    gross_expected = sum(metric["expected_return_pct"] for metric in metrics) / len(metrics)
+    short_count = sum(metric["recommendation"] == "SHORT" for metric in metrics)
+    long_count = len(metrics) - short_count
+    short_carry_drag = short_count * 2.0
+    net_expected = gross_expected - short_carry_drag
+    avg_confidence = sum(metric["confidence_pct"] for metric in metrics) / len(metrics)
+    top_idea = max(metrics, key=lambda metric: metric["conviction_score"])
+
+    return (
+        f"Equal-weighted {long_count} long / {short_count} short basket with "
+        f"{gross_expected:.1f}% average gross target move and ~{net_expected:.1f}% "
+        f"net after short-carry haircut. Average confidence {avg_confidence:.0f}%. "
+        f"Top-ranked signal: {top_idea['ticker']} ({top_idea['playbook']})."
+    )
+
+
+def export_metrics_csv(metrics: List[Dict[str, float]], output_dir: str) -> str:
+    csv_path = os.path.join(output_dir, "PitchSignalMetrics.csv")
+    fieldnames = [
+        "rank",
+        "ticker",
+        "recommendation",
+        "name",
+        "sector",
+        "price",
+        "target",
+        "expected_return_pct",
+        "confidence_pct",
+        "asymmetry_ratio",
+        "conviction_score",
+        "catalyst_score",
+        "downside_risk",
+        "playbook",
+        "thesis",
+    ]
+    with open(csv_path, "w", encoding="utf-8", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for metric in metrics:
+            writer.writerow(metric)
+    return csv_path
 
 def new_fig():
     fig = plt.figure(figsize=(13.33, 7.5))  # 16:9 widescreen
@@ -709,19 +940,145 @@ def pitch_dds(pdf):
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
 
-# ─── COMBINED SUMMARY DECK ────────────────────────────────────────────────────
+# ─── PORTFOLIO-LEVEL SLIDES ───────────────────────────────────────────────────
 
-def summary_slide(pdf):
+def quant_signal_slide(pdf, metrics):
+    fig = new_fig()
+    navy_header(
+        fig,
+        "Quant Signal Dashboard",
+        "Systematic ranking of payoff, confidence, and downside asymmetry",
+        "AUTO",
+        BLUE,
+    )
+    footer(fig, "PORTFOLIO", 1)
+
+    # Left: payoff bar chart
+    bar_ax = fig.add_axes([0.06, 0.18, 0.38, 0.52])
+    bar_ax.set_facecolor("#F8FAFD")
+    y_positions = np.arange(len(metrics))
+    payoffs = [metric["expected_return_pct"] for metric in metrics]
+    bar_colors = [recommendation_color(metric["recommendation"]) for metric in metrics]
+    max_payoff = max(payoffs) if payoffs else 1.0
+
+    bar_ax.barh(y_positions, payoffs, color=bar_colors, alpha=0.92, height=0.55)
+    bar_ax.set_yticks(y_positions)
+    bar_ax.set_yticklabels(
+        [metric["ticker"] for metric in metrics],
+        fontsize=10,
+        color=NAVY,
+        fontweight="bold",
+    )
+    bar_ax.invert_yaxis()
+    bar_ax.set_xlim(0, max_payoff * 1.32)
+    bar_ax.tick_params(axis='x', labelsize=8, colors=NAVY)
+    bar_ax.tick_params(axis='y', labelsize=10, colors=NAVY)
+    bar_ax.xaxis.grid(alpha=0.25, color=MGRAY)
+    bar_ax.set_axisbelow(True)
+    bar_ax.set_title("Target Move to Price Target", fontsize=10, color=NAVY, fontweight='bold')
+    bar_ax.set_xlabel("Expected payoff (%)", fontsize=8, color=NAVY)
+    for idx, payoff in enumerate(payoffs):
+        bar_ax.text(
+            payoff + max_payoff * 0.03,
+            idx,
+            f"{payoff:.0f}%",
+            va='center',
+            fontsize=9,
+            color=NAVY,
+            fontweight='bold',
+        )
+
+    # Right: confidence vs asymmetry bubble plot
+    bubble_ax = fig.add_axes([0.53, 0.18, 0.41, 0.52])
+    bubble_ax.set_facecolor("#F8FAFD")
+    asymmetry_values = [metric["asymmetry_ratio"] for metric in metrics]
+    confidence_values = [metric["confidence_pct"] for metric in metrics]
+    avg_asymmetry = sum(asymmetry_values) / len(asymmetry_values)
+    avg_confidence = sum(confidence_values) / len(confidence_values)
+
+    for metric in metrics:
+        bubble_size = 80 + metric["conviction_score"] * 4
+        bubble_ax.scatter(
+            metric["asymmetry_ratio"],
+            metric["confidence_pct"],
+            s=bubble_size,
+            color=recommendation_color(metric["recommendation"]),
+            alpha=0.65,
+            edgecolor=NAVY,
+            linewidth=0.8,
+        )
+        bubble_ax.text(
+            metric["asymmetry_ratio"] + 0.03,
+            metric["confidence_pct"] + 0.6,
+            metric["ticker"],
+            fontsize=9,
+            color=NAVY,
+            fontweight='bold',
+        )
+
+    bubble_ax.axvline(avg_asymmetry, color=MGRAY, linewidth=0.9, linestyle='--')
+    bubble_ax.axhline(avg_confidence, color=MGRAY, linewidth=0.9, linestyle='--')
+    bubble_ax.set_xlim(0.9, max(2.0, max(asymmetry_values) * 1.35))
+    bubble_ax.set_ylim(max(50, min(confidence_values) - 5), min(95, max(confidence_values) + 6))
+    bubble_ax.set_title("Asymmetry vs Confidence", fontsize=10, color=NAVY, fontweight='bold')
+    bubble_ax.set_xlabel("Reward-to-risk ratio", fontsize=8, color=NAVY)
+    bubble_ax.set_ylabel("Confidence (%)", fontsize=8, color=NAVY)
+    bubble_ax.tick_params(axis='both', labelsize=8, colors=NAVY)
+    bubble_ax.grid(alpha=0.25, color=MGRAY)
+
+    # Bottom: ranked signal cards
+    cards_ax = fig.add_axes([0.06, 0.06, 0.88, 0.09])
+    cards_ax.set_xlim(0, 1)
+    cards_ax.set_ylim(0, 1)
+    cards_ax.axis('off')
+    card_width = (0.98 / len(metrics)) - 0.01
+    for idx, metric in enumerate(metrics):
+        x0 = 0.01 + idx * (0.98 / len(metrics))
+        border = recommendation_color(metric["recommendation"])
+        cards_ax.add_patch(
+            FancyBboxPatch(
+                (x0, 0.08),
+                card_width,
+                0.84,
+                boxstyle="round,pad=0.01",
+                fc=WHITE,
+                ec=border,
+                lw=1.1,
+            )
+        )
+        cards_ax.text(
+            x0 + 0.01,
+            0.66,
+            f"#{int(metric['rank'])} {metric['ticker']}  |  {metric['playbook']}",
+            fontsize=7.3,
+            color=NAVY,
+            fontweight='bold',
+            va='center',
+        )
+        cards_ax.text(
+            x0 + 0.01,
+            0.33,
+            f"Conviction {metric['conviction_score']:.0f}  |  Catalysts {metric['catalyst_score']:.0f}/10  |  Risk {metric['downside_risk']:.0f}/10",
+            fontsize=7.1,
+            color=MGRAY,
+            va='center',
+        )
+
+    pdf.savefig(fig, bbox_inches='tight'); plt.close()
+
+
+def summary_slide(pdf, metrics):
     fig = new_fig()
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_facecolor(NAVY); ax.axis('off')
 
+    idea_label = "Idea" if len(metrics) == 1 else "Ideas"
     ax.text(0.5, 0.91, "EQUITY RESEARCH — PORTFOLIO SUMMARY", color=GOLD,
             fontsize=14, fontweight='bold', ha='center')
-    ax.text(0.5, 0.85, "Three Differentiated Ideas Across Sectors  ·  April 2026",
+    ax.text(0.5, 0.85, f"{len(metrics)} Differentiated {idea_label} Across Sectors  ·  {DECK_DATE_LABEL}",
             color=WHITE, fontsize=10, ha='center')
 
-    headers = ["Ticker", "Name", "Sector", "Rec.", "Price", "Target", "Upside", "Core Thesis"]
+    headers = ["Ticker", "Name", "Sector", "Rec.", "Price", "Target", "Payoff", "Core Thesis"]
     col_xs = [0.02, 0.09, 0.19, 0.31, 0.38, 0.45, 0.53, 0.63]
     col_ws = [0.07, 0.10, 0.12, 0.07, 0.07, 0.07, 0.10, 0.36]
 
@@ -735,40 +1092,43 @@ def summary_slide(pdf):
                 fontweight='bold', color=NAVY, ha='center', va='center',
                 transform=ax.transAxes)
 
-    pitches = [
-        ("PLTR",  "Palantir Technologies", "Technology",      "SHORT", "~$80", "$28",  "-65%",
-         "Valuation bubble (115x P/E); govt revenue plateauing; commercial growth misleading; massive insider selling"),
-        ("MEDP",  "Medpace Holdings",      "Healthcare / CRO","LONG",  "~$293","$410", "+40%",
-         "Founder-led best-in-class CRO; biotech outsourcing tailwind; superior margins at peer discount; $820M cash"),
-        ("DDS",   "Dillard's Inc.",        "Consumer / RE",   "LONG",  "~$333","$450", "+35%",
-         "85%+ float retired via buybacks; real estate NAV > market cap; 15%+ FCF yield; ignored by sell-side"),
-    ]
-    rec_colors = {"SHORT": RED, "LONG": GREEN}
-    up_colors  = {"-65%": RED, "+40%": GREEN, "+35%": GREEN}
-
-    for ri, (ticker, name, sector, rec, px, tgt, upside, thesis) in enumerate(pitches):
+    for ri, metric in enumerate(metrics):
         y = 0.63 - ri*0.175
         bg = "#0D2540" if ri % 2 == 0 else "#0F2A48"
         ax.add_patch(mpatches.FancyBboxPatch((0.02, y), 0.96, 0.155,
                                              boxstyle="square,pad=0", fc=bg, ec='none',
                                              transform=ax.transAxes))
-        vals = [ticker, name, sector, rec, px, tgt, upside, thesis]
+
+        vals = [
+            metric["ticker"],
+            metric["name"],
+            metric["sector"],
+            metric["recommendation"],
+            format_currency(metric["price"]),
+            format_currency(metric["target"]),
+            f"{metric['expected_return_pct']:.0f}%",
+            metric["thesis"],
+        ]
+
         for col_i, (val, cx, cw) in enumerate(zip(vals, col_xs, col_ws)):
-            if col_i == 3:  # rec badge
-                c = rec_colors[val]
+            if col_i == 3:  # recommendation badge + conviction score
+                badge_color = recommendation_color(metric["recommendation"])
                 ax.add_patch(mpatches.FancyBboxPatch((cx+0.005, y+0.045), cw-0.015, 0.065,
                                                      boxstyle="round,pad=0.01",
-                                                     fc=c, ec='none', transform=ax.transAxes))
-                ax.text(cx+(cw-0.005)/2, y+0.078, val, fontsize=9,
+                                                     fc=badge_color, ec='none', transform=ax.transAxes))
+                ax.text(cx+(cw-0.005)/2, y+0.086, val, fontsize=8,
                         fontweight='bold', color=WHITE, ha='center', va='center',
                         transform=ax.transAxes)
-            elif col_i == 6:  # upside
-                c = up_colors.get(val, WHITE)
+                ax.text(cx+(cw-0.005)/2, y+0.057, f"CV {metric['conviction_score']:.0f}",
+                        fontsize=6.5, color=GOLD, ha='center', va='center',
+                        transform=ax.transAxes, fontweight='bold')
+            elif col_i == 6:  # payoff
+                payoff_color = recommendation_color(metric["recommendation"])
                 ax.text(cx+(cw-0.005)/2, y+0.078, val, fontsize=11,
-                        fontweight='bold', color=c, ha='center', va='center',
+                        fontweight='bold', color=payoff_color, ha='center', va='center',
                         transform=ax.transAxes)
             elif col_i == 7:  # thesis
-                ax.text(cx+0.01, y+0.078, thesis, fontsize=7.5, color=LGRAY,
+                ax.text(cx+0.01, y+0.078, val, fontsize=7.3, color=LGRAY,
                         va='center', transform=ax.transAxes, wrap=True)
             elif col_i == 0:  # ticker
                 ax.text(cx+(cw-0.005)/2, y+0.078, val, fontsize=10,
@@ -779,16 +1139,12 @@ def summary_slide(pdf):
                         color=WHITE, ha='center', va='center',
                         transform=ax.transAxes)
 
-    # Portfolio expected return
     ax.add_patch(mpatches.FancyBboxPatch((0.02, 0.06), 0.96, 0.10,
                                          boxstyle="round,pad=0.015",
                                          fc=GOLD, ec='none', transform=ax.transAxes))
     ax.text(0.5, 0.13, "Portfolio Construction Note", fontsize=9,
             fontweight='bold', color=NAVY, ha='center', transform=ax.transAxes)
-    ax.text(0.5, 0.09,
-            "Equal-weighted long/short portfolio: MEDP (long) + DDS (long) + PLTR (short)  ·  "
-            "Blended expected return: ~47% gross, ~23% net of short carry  ·  "
-            "Low macro beta: MEDP/DDS uncorrelated to PLTR; idiosyncratic drivers dominate",
+    ax.text(0.5, 0.09, portfolio_construction_note(metrics),
             fontsize=8, color=NAVY, ha='center', transform=ax.transAxes)
 
     ax.text(0.5, 0.025, "Disclaimer: For illustrative/interview purposes only. Not investment advice.",
@@ -800,27 +1156,53 @@ def summary_slide(pdf):
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
-    os.makedirs("/Users/andrewstewart/stockpitch/output", exist_ok=True)
+    args = parse_args()
+    try:
+        selected_tickers = normalize_tickers(args.tickers)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
 
-    # Individual pitch PDFs
-    for name, func, ticker in [
-        ("PLTR_Short_Palantir",       pitch_pltr, "PLTR"),
-        ("MEDP_Long_Medpace",         pitch_medp, "MEDP"),
-        ("DDS_Long_Dillards",         pitch_dds,  "DDS"),
-    ]:
-        path = f"/Users/andrewstewart/stockpitch/output/{name}.pdf"
-        with PdfPages(path) as pdf:
-            globals()[f"pitch_{ticker.lower()}"](pdf)
-        print(f"  ✓  {path}")
+    output_dir = os.path.abspath(args.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Combined deck
-    combined = "/Users/andrewstewart/stockpitch/output/StockPitches_Combined.pdf"
-    with PdfPages(combined) as pdf:
-        summary_slide(pdf)
-        pitch_pltr(pdf)
-        pitch_medp(pdf)
-        pitch_dds(pdf)
-    print(f"  ✓  {combined}")
+    combined_name = args.combined_name
+    if not combined_name.lower().endswith(".pdf"):
+        combined_name = f"{combined_name}.pdf"
+
+    pitch_renderers = {
+        "PLTR": pitch_pltr,
+        "MEDP": pitch_medp,
+        "DDS": pitch_dds,
+    }
+    portfolio_metrics = build_portfolio_metrics(selected_tickers)
+    metrics_by_ticker = {
+        metric["ticker"]: metric for metric in portfolio_metrics
+    }
+
+    if args.export_csv:
+        csv_path = export_metrics_csv(portfolio_metrics, output_dir)
+        print(f"  ✓  {csv_path}")
+
+    if not args.combined_only:
+        for ticker in selected_tickers:
+            profile = PITCH_PROFILES[ticker]
+            path = os.path.join(output_dir, f"{profile.pdf_basename}.pdf")
+            with PdfPages(path) as pdf:
+                pitch_renderers[ticker](pdf)
+            metric = metrics_by_ticker[ticker]
+            print(
+                f"  ✓  {path}  |  payoff {metric['expected_return_pct']:.0f}%"
+                f", conviction {metric['conviction_score']:.0f}"
+            )
+
+    combined_path = os.path.join(output_dir, combined_name)
+    with PdfPages(combined_path) as pdf:
+        quant_signal_slide(pdf, portfolio_metrics)
+        summary_slide(pdf, portfolio_metrics)
+        for ticker in selected_tickers:
+            pitch_renderers[ticker](pdf)
+
+    print(f"  ✓  {combined_path}")
     print("\nAll PDFs generated successfully.")
 
 if __name__ == "__main__":
