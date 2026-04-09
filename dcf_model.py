@@ -1,3 +1,18 @@
+"""
+dcf_model.py — Discounted cash flow valuation engine for StockPitch.
+
+Fetches live financial statements from yfinance, projects free cash flows
+over a configurable horizon, and discounts them at WACC to arrive at an
+intrinsic value per share. Also computes a WACC / terminal-growth sensitivity
+heatmap and renders a multi-page PDF pitch brief via matplotlib.
+
+Key functions:
+    fetch_company_snapshot    — pull revenue, net income, FCF, shares, net debt
+    run_dcf                   — project FCFs and compute intrinsic value per share
+    build_sensitivity_heatmap — WACC × terminal-growth upside/downside grid
+    create_pitch_pdf_bytes    — render cover, projection, and sensitivity pages to PDF
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
