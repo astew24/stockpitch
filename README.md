@@ -1,6 +1,6 @@
 # StockPitch
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Hosted_Demo_Desk-0B1F3A?logo=github&logoColor=white)](https://cdn.jsdelivr.net/gh/astew24/stockpitch@main/docs/index.html)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Hosted_Demo_Desk-0B1F3A?logo=github&logoColor=white)](https://astew24.github.io/stockpitch/)
 
 Human-readable equity pitch deck generator with a systematic ranking layer.
 
@@ -38,7 +38,7 @@ The app:
 - generates a downloadable PDF brief from the current live analysis without storing user input
 
 ## Hosted Demo
-- Public demo desk: https://cdn.jsdelivr.net/gh/astew24/stockpitch@main/docs/index.html
+- Public demo desk: https://astew24.github.io/stockpitch/
 - The hosted version uses curated company snapshots so it can run on static hosting.
 - The Streamlit app remains the live-data path for arbitrary tickers and PDF export.
 
@@ -79,8 +79,8 @@ streamlit run streamlit_app.py
 
 Public static demo:
 1. Push this repo to GitHub.
-2. Open `docs/index.html` through the jsDelivr GitHub CDN link above for an immediate public URL.
-3. Optional: keep GitHub Pages enabled so `.github/workflows/pages.yml` can publish the same `docs/` site on a first-party GitHub Pages domain.
+2. GitHub Pages publishes the `docs/` app through `.github/workflows/pages.yml`.
+3. The public URL is `https://astew24.github.io/stockpitch/`.
 
 Streamlit Community Cloud:
 1. Push this repo to GitHub.
