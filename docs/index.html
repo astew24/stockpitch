@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StockPitch Demo Desk</title>
+    <meta
+      name="description"
+      content="A polished static demo for StockPitch with interactive DCF assumptions, curated research cases, and downloadable pitch artifacts."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="grain"></div>
+    <div class="page-shell">
+      <header class="topbar reveal">
+        <a class="brand" href="https://github.com/astew24/stockpitch" target="_blank" rel="noreferrer">
+          <span class="brand-mark">SP</span>
+          <span class="brand-copy">
+            <strong>StockPitch</strong>
+            <span>Demo Desk</span>
+          </span>
+        </a>
+        <div class="topbar-actions">
+          <a class="button button-ghost" href="https://github.com/astew24/stockpitch" target="_blank" rel="noreferrer">
+            View Repo
+          </a>
+          <a class="button button-ghost" href="../output/StockPitches_Combined.pdf" target="_blank" rel="noreferrer">
+            Open Combined Deck
+          </a>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero reveal">
+          <div class="hero-copy">
+            <p class="eyebrow">GitHub-hosted market research demo</p>
+            <h1 id="hero-title">A public-facing pitch demo with actual structure, not placeholder gloss.</h1>
+            <p class="hero-text">
+              The hosted build keeps a curated coverage universe so it can run entirely on GitHub-backed static hosting.
+              The local Streamlit app still supports arbitrary live tickers with yfinance; this surface is the cleaner
+              walkthrough for portfolio-manager style conversations.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-solid" href="#workspace">Open the Valuation Desk</a>
+              <a class="button button-ghost" href="https://github.com/astew24/stockpitch/blob/main/streamlit_app.py" target="_blank" rel="noreferrer">
+                Inspect the Live App
+              </a>
+            </div>
+          </div>
+
+          <div class="hero-card">
+            <div class="hero-card-header">
+              <span class="chip chip-live">Hosted Demo</span>
+              <span class="chip chip-muted">Stateless</span>
+              <span class="chip chip-muted">No API keys</span>
+            </div>
+            <div class="hero-card-body">
+              <div>
+                <p class="mini-label">Coverage Focus</p>
+                <h2 id="hero-company">Dillard's</h2>
+                <p id="hero-thesis" class="hero-thesis"></p>
+              </div>
+              <div class="hero-metrics" id="hero-metrics"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="workspace reveal" id="workspace">
+          <aside class="controls panel">
+            <div class="panel-head">
+              <p class="eyebrow eyebrow-dark">Valuation Desk</p>
+              <h2>Pressure-test the base case</h2>
+              <p class="panel-copy">
+                Switch names, move the core assumptions, and watch the intrinsic value update across the dashboard.
+              </p>
+            </div>
+
+            <div class="field-group">
+              <p class="field-label">Coverage Universe</p>
+              <div class="ticker-grid" id="ticker-grid"></div>
+            </div>
+
+            <div class="field-group">
+              <div class="field-row">
+                <label for="growth-rate">Revenue growth</label>
+                <output id="growth-rate-output"></output>
+              </div>
+              <input id="growth-rate" type="range" min="-4" max="20" step="0.5">
+            </div>
+
+            <div class="field-group">
+              <div class="field-row">
+                <label for="wacc">WACC</label>
+                <output id="wacc-output"></output>
+              </div>
+              <input id="wacc" type="range" min="6" max="14" step="0.25">
+            </div>
+
+            <div class="field-group">
+              <div class="field-row">
+                <label for="terminal-growth">Terminal growth</label>
+                <output id="terminal-growth-output"></output>
+              </div>
+              <input id="terminal-growth" type="range" min="1" max="4" step="0.25">
+            </div>
+
+            <div class="field-group">
+              <div class="field-row">
+                <label for="projection-years">Projection years</label>
+                <output id="projection-years-output"></output>
+              </div>
+              <input id="projection-years" type="range" min="4" max="8" step="1">
+            </div>
+
+            <button class="button button-solid control-reset" id="reset-assumptions" type="button">
+              Reset to company defaults
+            </button>
+
+            <div class="desk-note">
+              <p class="mini-label">Hosted Demo Notes</p>
+              <p>
+                Static hosting means the numbers below use curated snapshots rather than a live API call. The repo’s
+                Streamlit app remains the live-data path for custom tickers and PDF exports.
+              </p>
+            </div>
+          </aside>
+
+          <div class="analysis">
+            <section class="panel overview-panel">
+              <div class="panel-head split">
+                <div>
+                  <p class="eyebrow eyebrow-dark">Selected Company</p>
+                  <h2 id="company-name"></h2>
+                </div>
+                <div class="stance-pill" id="stance-pill"></div>
+              </div>
+              <div class="overview-grid">
+                <article class="memo-block">
+                  <p class="mini-label">Core Thesis</p>
+                  <p id="company-thesis" class="memo-copy"></p>
+                  <p class="mini-label">Key Debate</p>
+                  <p id="company-debate" class="memo-copy"></p>
+                </article>
+                <article class="memo-block">
+                  <p class="mini-label">Catalyst Set</p>
+                  <ul class="catalyst-list" id="company-catalysts"></ul>
+                </article>
+              </div>
+              <div class="metric-strip" id="metric-strip"></div>
+            </section>
+
+            <div class="analysis-grid">
+              <section class="panel">
+                <div class="panel-head split">
+                  <div>
+                    <p class="eyebrow eyebrow-dark">Historical Frame</p>
+                    <h2>Revenue, earnings, and free cash flow</h2>
+                  </div>
+                  <div class="legend">
+                    <span><i class="legend-swatch legend-revenue"></i>Revenue</span>
+                    <span><i class="legend-swatch legend-income"></i>Net income</span>
+                    <span><i class="legend-swatch legend-fcf"></i>Free cash flow</span>
+                  </div>
+                </div>
+                <div class="history-chart" id="history-chart"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <p class="eyebrow eyebrow-dark">Sensitivity Grid</p>
+                  <h2>Upside / downside versus current price</h2>
+                </div>
+                <div class="heatmap" id="heatmap"></div>
+              </section>
+            </div>
+
+            <div class="analysis-grid">
+              <section class="panel">
+                <div class="panel-head">
+                  <p class="eyebrow eyebrow-dark">Projection Table</p>
+                  <h2>Projected cash flow build</h2>
+                </div>
+                <div class="projection-table-wrap">
+                  <table class="projection-table">
+                    <thead>
+                      <tr>
+                        <th>Year</th>
+                        <th>Revenue</th>
+                        <th>FCF</th>
+                        <th>Discount</th>
+                        <th>PV of FCF</th>
+                      </tr>
+                    </thead>
+                    <tbody id="projection-table-body"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <p class="eyebrow eyebrow-dark">Artifacts</p>
+                  <h2>Downloadable pitch materials</h2>
+                </div>
+                <div class="artifact-grid">
+                  <a class="artifact-card" href="../output/StockPitches_Combined.pdf" target="_blank" rel="noreferrer">
+                    <span class="artifact-kicker">Combined Deck</span>
+                    <strong>Portfolio manager packet</strong>
+                    <span>The full interview deck with the quant dashboard, PM brief, and all pitches.</span>
+                  </a>
+                  <a class="artifact-card" id="artifact-primary" href="../output/DDS_Long_Dillards.pdf" target="_blank" rel="noreferrer">
+                    <span class="artifact-kicker">Selected Name</span>
+                    <strong id="artifact-primary-title"></strong>
+                    <span id="artifact-primary-copy"></span>
+                  </a>
+                  <a class="artifact-card" href="https://github.com/astew24/stockpitch/blob/main/README.md" target="_blank" rel="noreferrer">
+                    <span class="artifact-kicker">Implementation</span>
+                    <strong>Repo and setup notes</strong>
+                    <span>See the Streamlit entrypoint, CLI generator, and local run instructions in the repository.</span>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

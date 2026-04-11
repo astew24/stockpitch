@@ -1,12 +1,13 @@
 # StockPitch
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Streamlit_DCF-FF4B4B?logo=streamlit&logoColor=white)](#streamlit-demo)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Hosted_Demo_Desk-0B1F3A?logo=github&logoColor=white)](https://cdn.jsdelivr.net/gh/astew24/stockpitch@main/docs/index.html)
 
 Human-readable equity pitch deck generator with a systematic ranking layer.
 
 The repo now has two surfaces:
 - `generate_pitches.py` keeps the original PDF deck generator for the built-in interview ideas.
 - `streamlit_app.py` adds a read-only live DCF demo that pulls real public financials with `yfinance`, values a user-entered ticker, renders a WACC / terminal growth sensitivity heatmap, and exports a PDF brief on demand.
+- `docs/` adds a polished static demo desk that can be hosted directly from GitHub-backed infrastructure and used as the public-facing live link.
 
 ## What This Version Adds
 - Dynamic CLI (`--tickers`, `--output-dir`, `--combined-only`, `--combined-name`).
@@ -35,6 +36,11 @@ The app:
 - projects revenue and free cash flow using user-supplied DCF assumptions
 - computes intrinsic value per share, equity value, and a WACC / terminal growth sensitivity grid
 - generates a downloadable PDF brief from the current live analysis without storing user input
+
+## Hosted Demo
+- Public demo desk: https://cdn.jsdelivr.net/gh/astew24/stockpitch@main/docs/index.html
+- The hosted version uses curated company snapshots so it can run on static hosting.
+- The Streamlit app remains the live-data path for arbitrary tickers and PDF export.
 
 ## Usage
 ```bash
@@ -70,6 +76,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
+
+Public static demo:
+1. Push this repo to GitHub.
+2. Open `docs/index.html` through the jsDelivr GitHub CDN link above for an immediate public URL.
+3. Optional: keep GitHub Pages enabled so `.github/workflows/pages.yml` can publish the same `docs/` site on a first-party GitHub Pages domain.
 
 Streamlit Community Cloud:
 1. Push this repo to GitHub.
