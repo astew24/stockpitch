@@ -36,6 +36,9 @@ from generate_pitches import GOLD, GREEN, LGRAY, MGRAY, NAVY, RED, WHITE
 DEFAULT_WACC = 0.10
 DEFAULT_TERMINAL_GROWTH = 0.025
 DEFAULT_PROJECTION_YEARS = 5
+# Terminal growth should stay below the long-run GDP growth assumption —
+# anything above ~3.5% implies the company eventually grows faster than the economy.
+_TERMINAL_GROWTH_CAP = 0.035
 
 
 @dataclass(frozen=True)
