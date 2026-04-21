@@ -1,12 +1,15 @@
 # StockPitch
 
-**[Live Demo →](https://astew24.github.io/stockpitch/)**
+[Live demo](https://astew24.github.io/stockpitch/)
 
-Equity pitch deck generator with a DCF valuation layer and quant signal scoring. Generates PDF pitch decks from a set of ideas, scores each by expected payoff and confidence, and exports a combined deck with a portfolio brief and sensitivity heatmap.
+Two related things:
 
-The repo has two surfaces:
-- `generate_pitches.py` — CLI for generating PDF decks from the built-in idea set
-- `streamlit_app.py` — live DCF demo that pulls public financials with `yfinance`, values any ticker, and exports a PDF brief on demand
+- `generate_pitches.py` renders three hand-written stock pitches (PLTR
+  short, MEDP long, DDS long) into PDF decks plus a combined deck with a
+  signal-ranked cover slide and a PM brief.
+- `streamlit_app.py` is a live DCF demo that pulls public financials via
+  `yfinance` for any ticker, runs the valuation with your assumptions,
+  and exports a PDF brief on demand.
 
 ## Setup
 
@@ -14,32 +17,34 @@ The repo has two surfaces:
 python3 -m pip install -r requirements.txt
 ```
 
-## Usage
+## Generating pitch PDFs
 
 ```bash
-# Generate deck for default ideas
+# Default set
 python3 generate_pitches.py
 
-# Custom tickers
+# Subset + exports
 python3 generate_pitches.py --tickers MEDP,DDS --combined-only --export-csv
 
-# Full options
+# All exports + custom output
 python3 generate_pitches.py --output-dir ./output --combined-name InterviewDeck.pdf --export-json
 
-# Dry run (scoring + exports, no PDF dependencies needed)
+# Dry run (ranking + exports only; no matplotlib needed)
 python3 generate_pitches.py --tickers PLTR,MEDP --dry-run --export-csv --export-json --export-memo
 
-# Custom branding
+# Branding
 python3 generate_pitches.py --deck-date "Spring 2026" --desk-name "Blue River Capital" --analyst-name "Jane Doe"
 ```
 
-## Streamlit App
+## Streamlit app
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-Pulls live revenue, FCF, and balance sheet data from `yfinance`, runs a DCF with user-supplied assumptions, and generates a downloadable PDF brief. No stored data — everything is computed from the live yfinance feed.
+Pulls revenue, FCF, and balance-sheet data from `yfinance`, runs a DCF
+with user-supplied assumptions, and offers a downloadable PDF brief.
+Nothing is stored; every run re-reads the yfinance feed.
 
 ## Tests
 
@@ -47,9 +52,10 @@ Pulls live revenue, FCF, and balance sheet data from `yfinance`, runs a DCF with
 python3 -m unittest discover -s tests -p "test_*.py"
 ```
 
-## Output
+## What `generate_pitches.py` produces
 
-Running `generate_pitches.py` produces:
-- Individual PDFs per ticker (unless `--combined-only`)
-- Combined deck with quant signal dashboard, portfolio brief, and full pitch sections
-- Optional `PitchSignalMetrics.csv`, `PitchSignalMetrics.json`, `PortfolioManagerMemo.md`
+- Individual per-ticker PDFs (unless `--combined-only`)
+- A combined deck with the quant signal dashboard, PM brief, and each
+  pitch in full
+- Optionally `PitchSignalMetrics.csv`, `PitchSignalMetrics.json`,
+  `PortfolioManagerMemo.md`
