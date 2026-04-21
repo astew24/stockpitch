@@ -27,7 +27,7 @@ st.set_page_config(
 
 
 def inject_styles() -> None:
-    """Inject custom CSS — uses CSS variables so theme colors stay consistent with the PDF output."""
+    """Inject page CSS. The colour vars mirror the PDF palette in generate_pitches."""
     st.markdown(
         f"""
         <style>
@@ -251,10 +251,9 @@ def render_app() -> None:
           </div>
           <h1>StockPitch Live DCF Demo</h1>
           <p>
-            This app keeps the repo's PDF-first research feel, but swaps the hardcoded deck numbers
-            for live public financial statements from yfinance. Enter a ticker, adjust the core DCF
-            assumptions, review the valuation gap, inspect the WACC / terminal growth sensitivity,
-            and export a clean PDF brief without storing any user data.
+            Enter a ticker, tweak the growth / WACC / terminal-growth assumptions,
+            and get a DCF valuation, sensitivity heatmap, and downloadable PDF
+            brief. All numbers come from yfinance; nothing is stored.
           </p>
         </div>
         """,

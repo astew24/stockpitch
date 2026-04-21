@@ -1,16 +1,9 @@
 """
-dcf_model.py — Discounted cash flow valuation engine for StockPitch.
+DCF valuation used by the Streamlit demo.
 
-Fetches live financial statements from yfinance, projects free cash flows
-over a configurable horizon, and discounts them at WACC to arrive at an
-intrinsic value per share. Also computes a WACC / terminal-growth sensitivity
-heatmap and renders a multi-page PDF pitch brief via matplotlib.
-
-Key functions:
-    fetch_company_snapshot    — pull revenue, net income, FCF, shares, net debt
-    run_dcf                   — project FCFs and compute intrinsic value per share
-    build_sensitivity_heatmap — WACC × terminal-growth upside/downside grid
-    create_pitch_pdf_bytes    — render cover, projection, and sensitivity pages to PDF
+Pulls financial statements from yfinance, projects FCF over a configurable
+horizon, discounts at WACC, and renders a three-page PDF pitch (cover,
+projection table, WACC/terminal-growth sensitivity heatmap).
 """
 
 from __future__ import annotations
@@ -36,9 +29,6 @@ from generate_pitches import GOLD, GREEN, LGRAY, MGRAY, NAVY, RED, WHITE
 DEFAULT_WACC = 0.10
 DEFAULT_TERMINAL_GROWTH = 0.025
 DEFAULT_PROJECTION_YEARS = 5
-# Terminal growth should stay below the long-run GDP growth assumption —
-# anything above ~3.5% implies the company eventually grows faster than the economy.
-_TERMINAL_GROWTH_CAP = 0.035
 
 
 @dataclass(frozen=True)

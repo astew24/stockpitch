@@ -1,7 +1,9 @@
 """
-Stock Pitch Deck Generator
-3 differentiated pitches across sectors for AM interviews
-Uses matplotlib PdfPages — no extra dependencies needed
+Stock pitch deck generator.
+
+Renders three hand-written pitches (PLTR short, MEDP long, DDS long) to
+individual PDFs plus a combined deck with a ranked signal slide and a PM
+brief. matplotlib is imported lazily so --dry-run works without it.
 """
 
 import argparse
@@ -17,8 +19,7 @@ np = None
 PdfPages = None
 FancyBboxPatch = None
 
-# ─── DESIGN SYSTEM ────────────────────────────────────────────────────────────
-
+# Design tokens (shared with dcf_model.py's PDF renderer)
 NAVY   = "#0B1F3A"
 GOLD   = "#C9A84C"
 WHITE  = "#FFFFFF"
@@ -121,7 +122,7 @@ PITCH_PROFILES: Dict[str, PitchProfile] = {
 }
 
 
-def ensure_plotting_dependencies() -> None:  # noqa: PLR0912 — many import aliases, expected
+def ensure_plotting_dependencies() -> None:  # noqa: PLR0912 (many import aliases)
     global plt, mpatches, np, PdfPages, FancyBboxPatch
     if plt is not None:
         return
@@ -516,8 +517,6 @@ def bullet_section(ax, x, y, title, bullets, title_color=NAVY, bullet_color="#2C
                 fontsize=9, color=bullet_color, transform=ax.transAxes,
                 wrap=True)
 
-# ─── PITCH 1: SHORT PALANTIR ──────────────────────────────────────────────────
-
 def pitch_pltr(pdf):
 
     # --- SLIDE 1: COVER ---
@@ -731,7 +730,6 @@ def pitch_pltr(pdf):
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
 
-# ─── PITCH 2: LONG MEDPACE HOLDINGS ──────────────────────────────────────────
 
 def pitch_medp(pdf):
 
@@ -930,7 +928,6 @@ def pitch_medp(pdf):
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
 
-# ─── PITCH 3: LONG DILLARD'S ─────────────────────────────────────────────────
 
 def pitch_dds(pdf):
 
@@ -1143,7 +1140,6 @@ def pitch_dds(pdf):
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
 
-# ─── PORTFOLIO-LEVEL SLIDES ───────────────────────────────────────────────────
 
 def quant_signal_slide(pdf, metrics):
     fig = new_fig()
@@ -1429,8 +1425,6 @@ def summary_slide(pdf, metrics):
 
     pdf.savefig(fig, bbox_inches='tight'); plt.close()
 
-
-# ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
