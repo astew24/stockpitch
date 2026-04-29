@@ -1,52 +1,61 @@
-# StockPitch: Portfolio Manager Support & Research Automation
+# StockPitch
 
-An automated equity research workflow designed to accelerate the creation of decision-useful investment decks and systematic signal tracking. This system automates the "last mile" of reporting, allowing analysts to focus on research rather than document formatting.
+[Live demo](https://astew24.github.io/stockpitch/)
 
-## Project Overview
-StockPitch provides a dual-surface approach to equity research:
-1.  **Dynamic Analysis:** A live Streamlit app that pulls real-time financials, runs DCF models, and generates sensitivity heatmaps for instant valuation.
-2.  **Systematic Production:** A CLI tool that ranks multiple investment ideas using a custom "Quant Signal Engine" and generates professional 16-slide PDF pitch decks.
+Two related things:
 
-## Key Capabilities
-- **Automated Valuation:** Pulls revenue, FCF, and balance sheet data via `yfinance` to build dynamic DCF and Comparable Company models.
-- **Quant Signal Engine:** Scores investments based on expected payoff, confidence, catalysts, and downside risk to generate a "Portfolio Manager Brief."
-- **Institutional-Grade Export:** Generates structured PDF briefs and combined pitch decks with automated sizing, entry ranges, and stop-loss rules.
-- **Sensitivity Heatmaps:** Visualizes how intrinsic value changes across different WACC and terminal growth assumptions.
+- `generate_pitches.py` renders three hand-written stock pitches (PLTR
+  short, MEDP long, DDS long) into PDF decks plus a combined deck with a
+  signal-ranked cover slide and a PM brief.
+- `streamlit_app.py` is a live DCF demo that pulls public financials via
+  `yfinance` for any ticker, runs the valuation with your assumptions,
+  and exports a PDF brief on demand.
 
-## Tech Stack
-- **Languages:** Python (Pandas, NumPy)
-- **Frameworks:** Streamlit, ReportLab (for PDF generation)
-- **Data:** yfinance API
-- **Testing:** Python `unittest` for scoring and ranking logic
+## Setup
 
-## How to Run Locally
-
-### 1. Environment Setup
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
-### 2. Interactive Analysis (Streamlit)
+## Generating pitch PDFs
+
+```bash
+# Default set
+python3 generate_pitches.py
+
+# Subset + exports
+python3 generate_pitches.py --tickers MEDP,DDS --combined-only --export-csv
+
+# All exports + custom output
+python3 generate_pitches.py --output-dir ./output --combined-name InterviewDeck.pdf --export-json
+
+# Dry run (ranking + exports only; no matplotlib needed)
+python3 generate_pitches.py --tickers PLTR,MEDP --dry-run --export-csv --export-json --export-memo
+
+# Branding
+python3 generate_pitches.py --deck-date "Spring 2026" --desk-name "Blue River Capital" --analyst-name "Jane Doe"
+```
+
+## Streamlit app
+
 ```bash
 streamlit run streamlit_app.py
 ```
 
-### 3. Bulk Production (CLI)
+Pulls revenue, FCF, and balance-sheet data from `yfinance`, runs a DCF
+with user-supplied assumptions, and offers a downloadable PDF brief.
+Nothing is stored; every run re-reads the yfinance feed.
+
+## Tests
+
 ```bash
-# Generate decks for specific tickers with CSV/JSON metrics
-python3 generate_pitches.py --tickers AAPL,MSFT --export-csv --export-json
+python3 -m unittest discover -s tests -p "test_*.py"
 ```
 
-## What I Learned
-- **Workflow Optimization:** I learned how to translate a manual, spreadsheet-heavy process into a code-driven workflow that reduces reporting time by 90%.
-- **Decision Support Logic:** Building the Quant Signal Engine taught me how to quantify qualitative conviction and translate it into actionable portfolio sizing suggestions.
-- **Data Integration:** Handling live financial data required building robust validation layers to ensure model integrity across different company reporting structures.
+## What `generate_pitches.py` produces
 
-## Future Improvements
-- **Multi-Ticker Benchmarking:** Expand the Streamlit interface to allow side-by-side DCF comparisons for peer groups.
-- **Integrated Research Feed:** Pull in real-time news and analyst estimates to dynamically update catalyst maps.
-- **LLM Pitch Generation:** Use LLMs to draft the qualitative thesis slides based on the automated financial outputs.
-
----
-*Public Demo: [Hosted Demo Desk](https://astew24.github.io/stockpitch/)*
+- Individual per-ticker PDFs (unless `--combined-only`)
+- A combined deck with the quant signal dashboard, PM brief, and each
+  pitch in full
+- Optionally `PitchSignalMetrics.csv`, `PitchSignalMetrics.json`,
+  `PortfolioManagerMemo.md`

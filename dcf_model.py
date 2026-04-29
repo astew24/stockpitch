@@ -1,3 +1,11 @@
+"""
+DCF valuation used by the Streamlit demo.
+
+Pulls financial statements from yfinance, projects FCF over a configurable
+horizon, discounts at WACC, and renders a three-page PDF pitch (cover,
+projection table, WACC/terminal-growth sensitivity heatmap).
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -70,6 +78,7 @@ class DCFResult:
 
 
 def _normalize_history(series: pd.Series) -> pd.Series:
+    """Coerce to numeric, drop NaNs, ensure DatetimeIndex, sort ascending."""
     cleaned = pd.to_numeric(series, errors="coerce").dropna()
     if cleaned.empty:
         raise ValueError("Required financial statement row is empty.")
@@ -79,6 +88,7 @@ def _normalize_history(series: pd.Series) -> pd.Series:
 
 
 def _extract_statement_series(statement: pd.DataFrame, labels: Iterable[str]) -> pd.Series:
+    """Try each label in order and return the first match. Raises if none found."""
     if statement is None or statement.empty:
         raise ValueError("Missing financial statement data from yfinance.")
 
@@ -364,12 +374,13 @@ def _header(ax, title: str, subtitle: str, tag: str, tag_color: str) -> None:
 
 
 def _footer(ax, ticker: str) -> None:
+    from datetime import date
     ax.set_facecolor(NAVY)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
     ax.text(0.03, 0.5, ticker, color=MGRAY, fontsize=8, ha="left")
-    ax.text(0.97, 0.5, "Generated from live yfinance data", color=MGRAY, fontsize=8, ha="right")
+    ax.text(0.97, 0.5, f"Generated from live yfinance data · {date.today().isoformat()}", color=MGRAY, fontsize=8, ha="right")
 
 
 def _build_cover_page(pdf: PdfPages, snapshot: CompanyFinancialSnapshot, result: DCFResult) -> None:
